@@ -105,18 +105,20 @@
    - 배치 처리로 API 응답 시간에 영향 없음
 
 ### 3. 기관 추천 API 기능
-- [ ] 기관 추천 API 
+- [x] 기관 추천 API 
 3. 기관 추천 API 기능
    - `POST /api/v1/recommendations`
    - 요청: `{memberId, elderlyProfileId, text}`
    - 응답: `{recommendations: [{institutionId, matchScore, keywords}], responseTime}`
 
-4. 사용자 데이터 조회
+### 4. 사용자 데이터 조회 기능
+4. [x] 사용자 데이터 조회
    - Member + ElderlyProfile JOIN 쿼리
    - 캐싱: Redis (TTL: 5분)
    - 에러 처리: 사용자 NotFound 404 반환
 
-5. 사용자 텍스트 생성 유틸
+### 5. 사용자 텍스트 생성 유틸 기능
+5. [x] 사용자 텍스트 생성 유틸
    - 조회된 사용자와 어르신 데이터를 통해 텍스트 생성
    - **중요**: 사용자와 기관 모두 같은 관점으로 텍스트 작성
      - 건강 상태, 인지 수준, 활동 수준
@@ -153,13 +155,15 @@
    - 추가 요청 텍스트: "저희 어머니가 사람 많은 곳을 힘들어 하세요"
    ```
 
-6. 텍스트 → 임베딩 변환
+### 6. 텍스트를 임베딩으로 변환 기능 
+6. [x] 텍스트 → 임베딩 변환
    - bge-m3 모델 사용 (SentenceTransformer)
    - normalize_embeddings=True로 코사인 유사도 최적화
    - 재시도 로직: 3회, exponential backoff
    - 타임아웃: 10초
 
-7. 사전 필터링 (SQL WHERE절)
+### 7. 사전 필터링 기능
+7. [ ] 사전 필터링 (SQL WHERE절)
    - 제외 조건:
      - 정원 초과 기관
      - 휴업/폐업 상태
@@ -168,13 +172,15 @@
      - 지역 범위 (예: 사용자 주소 기준 반경 20km)
    - 성능: 10,000개 → 3,000~5,000개로 축소
 
-8. pgvector 코사인 유사도 계산
+### 8. pgvector 코사인 유사도 계산 기능
+8. [ ] pgvector 코사인 유사도 계산
    - SQL: `ORDER BY embedding <=> $1::vector LIMIT 5`
    - 인덱스: `USING ivfflat (embedding vector_cosine_ops)`
    - 유사도 점수: `1 - (embedding <=> $1)` (0~1 범위)
    - 
 
-9. 매칭 키워드 추출 (LLM 활용)
+### 9. 매칭 키워드 추출 기능
+9. [ ] 매칭 키워드 추출 (LLM 활용)
    - 5개 기관을 1회 LLM 호출로 배치 처리
    - 프롬프트:
     ```
