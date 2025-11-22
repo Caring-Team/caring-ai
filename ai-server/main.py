@@ -4,9 +4,10 @@ import logging
 from contextlib import asynccontextmanager
 
 from models.institution import InstitutionRequest, InstitutionResponse
+from models.user import Member, ElderlyProfile
 from services.embedding_service import EmbeddingService
 from services.database_service import DatabaseService
-from utils.text_formatter import create_institution_text
+from utils.text_formatter import create_institution_text, create_user_profile_text
 
 # 로깅 설정
 logging.basicConfig(
@@ -43,7 +44,7 @@ async def lifespan(app: FastAPI):
 # FastAPI 앱 생성
 app = FastAPI(
     title="Caring AI Server",
-    description="요양 기관 추천 AI 서버 - 기능 1: 기관 임베딩 생성 및 저장",
+    description="요양 기관 추천 AI 서버",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -127,6 +128,55 @@ async def create_institution_embedding(request: InstitutionRequest):
         raise HTTPException(
             status_code=500,
             detail=f"임베딩 생성 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@app.post("/api/v1/users/profile-text")
+async def generate_user_profile_text(
+    member: Member,
+    elderly_profile: ElderlyProfile,
+    additional_text: str = ""
+):
+    """
+    기능 4: 사용자 데이터를 받아서 텍스트로 변환
+    
+    Spring에서 Member와 ElderlyProfile 정보를 보내면
+    기관과 동일한 형식의 텍스트로 변환합니다.
+    """
+    try:
+        logger.info(f"📥 사용자 프로필 텍스트 생성 요청: 회원={member.name}, 어르신={elderly_profile.name}")
+        
+        # 사용자 프로필 → 텍스트 변환
+        user_text = create_user_profile_text(
+            member_name=member.name,
+            elderly_name=elderly_profile.name,
+            age=elderly_profile.age,
+            gender=elderly_profile.gender,
+            activity_level=elderly_profile.activity_level.value,
+            cognitive_level=elderly_profile.cognitive_level.value,
+            care_grade=elderly_profile.care_grade or "",
+            preferred_specialized_diseases=elderly_profile.preferred_specialized_diseases,
+            preferred_service_types=elderly_profile.preferred_service_types,
+            preferred_operational_features=elderly_profile.preferred_operational_features,
+            preferred_facility_features=elderly_profile.preferred_facility_features,
+            additional_text=additional_text
+        )
+        
+        logger.info(f"✅ 사용자 프로필 텍스트 생성 완료 (길이: {len(user_text)}자)")
+        
+        return {
+            "success": True,
+            "member_id": member.member_id,
+            "elderly_profile_id": elderly_profile.elderly_profile_id,
+            "profile_text": user_text,
+            "text_length": len(user_text)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 사용자 프로필 텍스트 생성 실패: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"텍스트 생성 중 오류가 발생했습니다: {str(e)}"
         )
 
 
