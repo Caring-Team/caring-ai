@@ -2,9 +2,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 import logging
 from contextlib import asynccontextmanager
+import time
 
 from models.institution import InstitutionRequest, InstitutionResponse
 from models.user import Member, ElderlyProfile
+from models.recommendation import RecommendationResponse, RecommendationItem
 from services.embedding_service import EmbeddingService
 from services.database_service import DatabaseService
 from utils.text_formatter import create_institution_text, create_user_profile_text
@@ -238,6 +240,103 @@ async def generate_user_profile_embedding(
         raise HTTPException(
             status_code=500,
             detail=f"임베딩 생성 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@app.post("/api/v1/recommendations", response_model=RecommendationResponse)
+async def get_recommendations(
+    member: Member,
+    elderlyProfile: ElderlyProfile,
+    additionalText: str = "",
+    limit: int = 5
+):
+    """
+    기능 3: 사용자 프로필 기반 기관 추천
+    
+    사용자 정보를 임베딩으로 변환한 후 pgvector로 유사한 기관을 검색하고
+    RecommendationItem 형식으로 반환합니다.
+    """
+    try:
+        start_time = time.time()
+        
+        logger.info(f"📥 기관 추천 요청: 회원={member.name}, 어르신={elderlyProfile.name}, limit={limit}")
+        
+        # 1. 사용자 프로필 → 텍스트 변환
+        user_text = create_user_profile_text(
+            member_name=member.name,
+            elderly_name=elderlyProfile.name,
+            gender=elderlyProfile.gender.value,
+            birth_date=str(elderlyProfile.birthDate) if elderlyProfile.birthDate else "",
+            activity_level=elderlyProfile.activityLevel.value if elderlyProfile.activityLevel else "",
+            cognitive_level=elderlyProfile.cognitiveLevel.value if elderlyProfile.cognitiveLevel else "",
+            long_term_care_grade=elderlyProfile.longTermCareGrade.value if elderlyProfile.longTermCareGrade else "",
+            notes=elderlyProfile.notes or "",
+            address=elderlyProfile.address or "",
+            preferred_specialized_diseases=elderlyProfile.preferredSpecializedDiseases,
+            preferred_service_types=elderlyProfile.preferredServiceTypes,
+            preferred_operational_features=elderlyProfile.preferredOperationalFeatures,
+            preferred_facility_features=elderlyProfile.preferredFacilityFeatures,
+            additional_text=additionalText
+        )
+        
+        # 2. 텍스트 → 임베딩 변환
+        user_embedding = embedding_service.encode_text(user_text)
+        
+        # 3. 유사 기관 검색 (limit보다 많이 가져와서 필터링 여유 확보)
+        similar_institutions = db_service.search_similar_institutions(
+            user_embedding=user_embedding,
+            limit=limit * 2,  # 필터링을 위해 2배로 조회
+            min_similarity=0.0
+        )
+        
+        # 4. RecommendationItem 형식으로 변환
+        recommendations = []
+        for inst in similar_institutions[:limit]:  # limit만큼만 반환
+            metadata = inst.get("metadata", {})
+            
+            # 태그 리스트 생성 (전문질환, 서비스, 운영특성, 시설 모두 합침)
+            tags = []
+            tags.extend(metadata.get("specialized_diseases", []))
+            tags.extend(metadata.get("service_types", []))
+            tags.extend(metadata.get("operational_features", []))
+            tags.extend(metadata.get("facility_features", []))
+            
+            # TODO: 추천 이유는 나중에 LLM으로 생성 (기능 9)
+            # 지금은 임시로 간단한 텍스트 생성
+            recommendation_reason = f"유사도 {inst['similarity']:.2%}로 매칭되었습니다."
+            
+            recommendation_item = RecommendationItem(
+                institutionId=inst["institutionId"],
+                similarity=inst["similarity"],
+                name=metadata.get("name", ""),
+                type=metadata.get("type", ""),
+                address=metadata.get("address", ""),
+                isAvailable=True,  # TODO: Spring에서 입소 가능 여부 정보 필요
+                tags=tags,
+                recommendationReason=recommendation_reason
+            )
+            
+            recommendations.append(recommendation_item)
+        
+        # 5. 응답 시간 계산
+        response_time = int((time.time() - start_time) * 1000)  # ms 단위
+        
+        logger.info(f"✅ 기관 추천 완료: {len(recommendations)}개 반환 (응답시간: {response_time}ms)")
+        
+        return RecommendationResponse(
+            success=True,
+            memberId=member.memberId,
+            elderlyProfileId=elderlyProfile.elderlyProfileId,
+            totalResults=len(recommendations),
+            recommendations=recommendations,
+            responseTime=response_time
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ 기관 추천 실패: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"기관 추천 중 오류가 발생했습니다: {str(e)}"
         )
 
 
