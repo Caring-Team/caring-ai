@@ -2,7 +2,7 @@ import psycopg2
 from psycopg2.extras import Json
 import numpy as np
 import logging
-from typing import Optional
+from typing import Optional, List, Dict
 import os
 from dotenv import load_dotenv
 
@@ -77,6 +77,81 @@ class DatabaseService:
         except Exception as e:
             self.conn.rollback()
             logger.error(f"❌ 임베딩 저장 실패: {str(e)}")
+            raise
+    
+    def search_similar_institutions(
+        self,
+        user_embedding: np.ndarray,
+        limit: int = 5,
+        min_similarity: float = 0.0
+    ) -> List[Dict]:
+        """
+        기능 7: 사용자 임베딩과 유사한 기관 검색
+        
+        pgvector의 코사인 유사도를 사용하여 검색합니다.
+        <=> 연산자는 코사인 거리를 계산하며, IVFFlat 인덱스로 최적화됩니다.
+        
+        Args:
+            user_embedding: 사용자 프로필 임베딩 벡터 (1024차원)
+            limit: 반환할 최대 기관 수 (기본 10개)
+            min_similarity: 최소 유사도 threshold (0~1, 기본 0.0)
+        
+        Returns:
+            유사 기관 리스트 [
+                {
+                    "institutionId": int,
+                    "similarity": float,
+                    "metadata": dict,
+                    "originalText": str
+                },
+                ...
+            ]
+        """
+        try:
+            cursor = self.conn.cursor()
+            
+            # numpy array를 list로 변환
+            embedding_list = user_embedding.tolist()
+            
+            # pgvector 코사인 유사도 검색 쿼리
+            # <=> 연산자: 코사인 거리 (0에 가까울수록 유사)
+            # 1 - 코사인 거리 = 코사인 유사도 (1에 가까울수록 유사, 0~1 범위)
+            query = """
+            SELECT 
+                institution_id,
+                1 - (embedding <=> %s::vector) AS similarity,
+                metadata,
+                original_text
+            FROM institution_embeddings
+            WHERE 1 - (embedding <=> %s::vector) >= %s
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s
+            """
+            
+            cursor.execute(query, (
+                embedding_list,
+                embedding_list,
+                min_similarity,
+                embedding_list,
+                limit
+            ))
+            
+            results = []
+            for row in cursor.fetchall():
+                results.append({
+                    "institutionId": row[0],
+                    "similarity": float(row[1]),
+                    "metadata": row[2],
+                    "originalText": row[3]
+                })
+            
+            cursor.close()
+            
+            logger.info(f"✅ 유사 기관 검색 완료: {len(results)}개 발견 (상위 유사도: {results[0]['similarity']:.4f if results else 0})")
+            return results
+            
+        except Exception as e:
+            logger.error(f"❌ 유사도 검색 실패: {str(e)}")
             raise
     
     def close(self):
