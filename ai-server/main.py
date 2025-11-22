@@ -134,8 +134,8 @@ async def create_institution_embedding(request: InstitutionRequest):
 @app.post("/api/v1/users/profile-text")
 async def generate_user_profile_text(
     member: Member,
-    elderly_profile: ElderlyProfile,
-    additional_text: str = ""
+    elderlyProfile: ElderlyProfile,
+    additionalText: str = ""
 ):
     """
     기능 4: 사용자 데이터를 받아서 텍스트로 변환
@@ -144,32 +144,34 @@ async def generate_user_profile_text(
     기관과 동일한 형식의 텍스트로 변환합니다.
     """
     try:
-        logger.info(f"📥 사용자 프로필 텍스트 생성 요청: 회원={member.name}, 어르신={elderly_profile.name}")
+        logger.info(f"📥 사용자 프로필 텍스트 생성 요청: 회원={member.name}, 어르신={elderlyProfile.name}")
         
         # 사용자 프로필 → 텍스트 변환
         user_text = create_user_profile_text(
             member_name=member.name,
-            elderly_name=elderly_profile.name,
-            age=elderly_profile.age,
-            gender=elderly_profile.gender,
-            activity_level=elderly_profile.activity_level.value,
-            cognitive_level=elderly_profile.cognitive_level.value,
-            care_grade=elderly_profile.care_grade or "",
-            preferred_specialized_diseases=elderly_profile.preferred_specialized_diseases,
-            preferred_service_types=elderly_profile.preferred_service_types,
-            preferred_operational_features=elderly_profile.preferred_operational_features,
-            preferred_facility_features=elderly_profile.preferred_facility_features,
-            additional_text=additional_text
+            elderly_name=elderlyProfile.name,
+            gender=elderlyProfile.gender.value,
+            birth_date=str(elderlyProfile.birthDate) if elderlyProfile.birthDate else "",
+            activity_level=elderlyProfile.activityLevel.value if elderlyProfile.activityLevel else "",
+            cognitive_level=elderlyProfile.cognitiveLevel.value if elderlyProfile.cognitiveLevel else "",
+            long_term_care_grade=elderlyProfile.longTermCareGrade.value if elderlyProfile.longTermCareGrade else "",
+            notes=elderlyProfile.notes or "",
+            address=elderlyProfile.address or "",
+            preferred_specialized_diseases=elderlyProfile.preferredSpecializedDiseases,
+            preferred_service_types=elderlyProfile.preferredServiceTypes,
+            preferred_operational_features=elderlyProfile.preferredOperationalFeatures,
+            preferred_facility_features=elderlyProfile.preferredFacilityFeatures,
+            additional_text=additionalText
         )
         
         logger.info(f"✅ 사용자 프로필 텍스트 생성 완료 (길이: {len(user_text)}자)")
         
         return {
             "success": True,
-            "member_id": member.member_id,
-            "elderly_profile_id": elderly_profile.elderly_profile_id,
-            "profile_text": user_text,
-            "text_length": len(user_text)
+            "memberId": member.memberId,
+            "elderlyProfileId": elderlyProfile.elderlyProfileId,
+            "profileText": user_text,
+            "textLength": len(user_text)
         }
         
     except Exception as e:
@@ -177,6 +179,65 @@ async def generate_user_profile_text(
         raise HTTPException(
             status_code=500,
             detail=f"텍스트 생성 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@app.post("/api/v1/users/profile-embedding")
+async def generate_user_profile_embedding(
+    member: Member,
+    elderlyProfile: ElderlyProfile,
+    additionalText: str = ""
+):
+    """
+    기능 5: 사용자 데이터를 받아서 임베딩으로 변환
+    
+    Spring에서 Member와 ElderlyProfile 정보를 보내면
+    1. 텍스트로 변환
+    2. 임베딩으로 변환
+    3. 임베딩 벡터 반환
+    """
+    try:
+        logger.info(f"📥 사용자 프로필 임베딩 생성 요청: 회원={member.name}, 어르신={elderlyProfile.name}")
+        
+        # 1. 사용자 프로필 → 텍스트 변환
+        user_text = create_user_profile_text(
+            member_name=member.name,
+            elderly_name=elderlyProfile.name,
+            gender=elderlyProfile.gender.value,
+            birth_date=str(elderlyProfile.birthDate) if elderlyProfile.birthDate else "",
+            activity_level=elderlyProfile.activityLevel.value if elderlyProfile.activityLevel else "",
+            cognitive_level=elderlyProfile.cognitiveLevel.value if elderlyProfile.cognitiveLevel else "",
+            long_term_care_grade=elderlyProfile.longTermCareGrade.value if elderlyProfile.longTermCareGrade else "",
+            notes=elderlyProfile.notes or "",
+            address=elderlyProfile.address or "",
+            preferred_specialized_diseases=elderlyProfile.preferredSpecializedDiseases,
+            preferred_service_types=elderlyProfile.preferredServiceTypes,
+            preferred_operational_features=elderlyProfile.preferredOperationalFeatures,
+            preferred_facility_features=elderlyProfile.preferredFacilityFeatures,
+            additional_text=additionalText
+        )
+        
+        logger.info(f"📝 텍스트 변환 완료 (길이: {len(user_text)}자)")
+        
+        # 2. 텍스트 → 임베딩 변환
+        embedding = embedding_service.encode_text(user_text)
+        
+        logger.info(f"✅ 사용자 프로필 임베딩 생성 완료 (차원: {len(embedding)})")
+        
+        return {
+            "success": True,
+            "memberId": member.memberId,
+            "elderlyProfileId": elderlyProfile.elderlyProfileId,
+            "profileText": user_text,
+            "embedding": embedding.tolist(),  # numpy array를 list로 변환
+            "embeddingDimension": len(embedding)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 사용자 프로필 임베딩 생성 실패: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"임베딩 생성 중 오류가 발생했습니다: {str(e)}"
         )
 
 

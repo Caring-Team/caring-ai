@@ -51,11 +51,13 @@ def create_institution_text(
 def create_user_profile_text(
     member_name: str,
     elderly_name: str,
-    age: int,
     gender: str,
+    birth_date: str,
     activity_level: str,
     cognitive_level: str,
-    care_grade: str,
+    long_term_care_grade: str,
+    notes: str,
+    address: str,
     preferred_specialized_diseases: List[str],
     preferred_service_types: List[str],
     preferred_operational_features: List[str],
@@ -69,35 +71,69 @@ def create_user_profile_text(
     
     # 활동 수준 설명
     activity_descriptions = {
-        "HIGH": "혼자 외출 가능하고 일상생활 대부분 스스로 가능",
-        "MID": "실내 활동 위주, 짧은 거리 보행 가능",
-        "LOW": "거동이 많이 불편하고 이동 시 도움 필요",
-        "BEDRIDDEN": "침대에서만 생활"
+        "HIGH": "높음 - 혼자 외출 가능하고 일상생활 대부분 스스로 가능",
+        "MEDIUM": "보통 - 실내 활동 위주, 짧은 거리 보행 가능",
+        "LOW": "낮음 - 거동이 많이 불편하고 이동 시 도움 필요",
+        "BEDRIDDEN": "와상 - 침대에서만 생활"
     }
     
     # 인지 수준 설명
     cognitive_descriptions = {
-        "NORMAL": "인지 기능에 큰 문제 없음",
-        "MILD_COGNITIVE_IMPAIRMENT": "경미한 기억력 저하가 있습니다",
-        "MILD_DEMENTIA": "일상생활에 약간의 지장이 가는 수준입니다",
-        "MODERATE_DEMENTIA": "치매 초기로 가끔 기억력 저하와 길 잃음이 있습니다",
-        "SEVERE_DEMENTIA": "인지 저하가 심하고 지속적인 보호가 필요합니다"
+        "NORMAL": "정상 - 인지 기능에 큰 문제 없음",
+        "MILD_COGNITIVE_IMPAIRMENT": "경도 인지 장애 - 경미한 기억력 저하가 있습니다",
+        "MILD_DEMENTIA": "경증 치매 - 일상생활에 약간의 지장이 가는 수준입니다",
+        "MODERATE_DEMENTIA": "중등도 치매 - 치매 초기로 가끔 기억력 저하와 길 잃음이 있습니다",
+        "SEVERE_DEMENTIA": "중증 치매 - 인지 저하가 심하고 지속적인 보호가 필요합니다"
     }
+    
+    # 장기요양등급 설명
+    care_grade_descriptions = {
+        "GRADE_1": "1등급 (95점 이상)",
+        "GRADE_2": "2등급 (75~95점 미만)",
+        "GRADE_3": "3등급 (60~75점 미만)",
+        "GRADE_4": "4등급 (51~60점 미만)",
+        "GRADE_5": "5등급 (45~51점 미만)",
+        "COGNITIVE": "인지등급 (치매 어르신)",
+        "NONE": "등급 없음"
+    }
+    
+    # 나이 계산 (birth_date가 있는 경우)
+    age_text = ""
+    if birth_date:
+        from datetime import datetime
+        try:
+            birth = datetime.strptime(birth_date, "%Y-%m-%d")
+            age = datetime.now().year - birth.year
+            age_text = f"만 {age}세"
+        except:
+            age_text = ""
     
     text_parts = []
     
     # 기본 정보
     text_parts.append(f"[어르신 프로필]")
     text_parts.append(f"- 기본 정보:")
-    text_parts.append(f"  - 연령: 만 {age}세")
+    text_parts.append(f"  - 이름: {elderly_name}")
+    if age_text:
+        text_parts.append(f"  - 연령: {age_text}")
     text_parts.append(f"  - 성별: {gender}")
     
     # 건강 및 기능 상태
     text_parts.append(f"- 건강 및 기능 상태:")
-    text_parts.append(f"  - 활동 수준: {activity_descriptions.get(activity_level, activity_level)}")
-    text_parts.append(f"  - 인지 수준: {cognitive_descriptions.get(cognitive_level, cognitive_level)}")
-    if care_grade:
-        text_parts.append(f"  - 장기 요양 등급: {care_grade}")
+    if activity_level:
+        text_parts.append(f"  - 활동 수준: {activity_descriptions.get(activity_level, activity_level)}")
+    if cognitive_level:
+        text_parts.append(f"  - 인지 수준: {cognitive_descriptions.get(cognitive_level, cognitive_level)}")
+    if long_term_care_grade:
+        text_parts.append(f"  - 장기 요양 등급: {care_grade_descriptions.get(long_term_care_grade, long_term_care_grade)}")
+    
+    # 특이사항
+    if notes:
+        text_parts.append(f"- 특이사항: {notes}")
+    
+    # 주소
+    if address:
+        text_parts.append(f"- 주소: {address}")
     
     # 선호 태그
     text_parts.append(f"- 선호 태그:")
