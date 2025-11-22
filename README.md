@@ -11,23 +11,18 @@
    - 배치 작업: 매일 자정 또는 1시간마다 플래그된 기관만 재생성
    - Blue-Green 방식: 새 임베딩 생성 후 교체
 
-3. [요청] Spring으로부터 MemberId, ElderlyProfileId, text(추가 입력 받은 텍스트)를 전달 받는다.
-   - 파라미터: memberId, elderlyProdileId, test(추가 텍스트)
+3. [요청] Spring으로부터 Member, ElderlyProfile, text(추가 입력 받은 텍스트)를 전달 받는다.
+   - 파라미터: member, elderlyProfile, text(추가 텍스트)
 
-4. [조회] 사용자 MemberId로부터 DB에서 사용자 데이터를 조회한다.
-   - memberId로 member 조회
-   - elderlyProfileId로 ElderlyProdile 조회
-   - 캐싱: Redis에 5분간 캐시 저장
-
-5. [생성] Member + ElderlyProfile + text 를 통해서 기관의 임베딩과 동일한 공간에 위치하도록 텍스트를 생성한다.
+3. [생성] Member + ElderlyProfile + text 를 통해서 기관의 임베딩과 동일한 공간에 위치하도록 텍스트를 생성한다.
    - Member + ElderlyProdile + text 결합 텍스트 생성
    - 기관의 텍스트와 비슷한 템플릿으로 변환
    
-6. [임베딩] 사용자 텍스트를 임베딩으로 변환
+4. [임베딩] 사용자 텍스트를 임베딩으로 변환
    - bge-m3 모델 사용 (1024차원)
    - 재시도 로직: 3회 시도, 실패 시 5XX 반환
 
-7. [검색] pgvector로 유사 기관 검색
+5. [검색] pgvector로 유사 기관 검색
    - **1: 사전 필터링 (SQL WHERE절)**
      - 입소 가능 여부 (정원 초과 제외)
      - 선호 서비스 타입 매칭
@@ -37,14 +32,14 @@
      - `ORDER BY embedding <=> $1 LIMIT 5`
      - IVFFlat 인덱스 활용으로 O(log n) 검색
 
-8. [분석] 매칭 이유 키워드 추출
+6. [분석] 매칭 이유 키워드 추출
    - **LLM 배치 호출**
      - 5개 기관을 1번의 LLM 호출로 처리
      - GPT-4o-mini 사용 (저렴, 빠름)
      - 각 기관당 핵심 키워드 3개 추출
      - 예상 시간: 300-800ms
    
-9.  **[응답] 추천 결과 반환**
+7.  **[응답] 추천 결과 반환**
     - 응답 형식:
     ```json
     {
