@@ -1,6 +1,12 @@
 from .institution import InstitutionRequest, InstitutionResponse
 from .user import Member, ElderlyProfile
-from .recommendation import RecommendationRequest, RecommendationResponse, RecommendationItem
+from .recommendation import (
+    RecommendationRequest, 
+    RecommendationResponse, 
+    RecommendationItem,
+    MemberInfo,
+    ElderlyInfo
+)
 
 __all__ = [
     "InstitutionRequest", 
@@ -9,5 +15,7 @@ __all__ = [
     "ElderlyProfile",
     "RecommendationRequest",
     "RecommendationResponse",
-    "RecommendationItem"
+    "RecommendationItem",
+    "MemberInfo",
+    "ElderlyInfo"
 ]

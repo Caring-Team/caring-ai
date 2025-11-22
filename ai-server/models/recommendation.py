@@ -2,6 +2,52 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 
+class MemberInfo(BaseModel):
+    """회원 정보"""
+    memberId: int = Field(..., description="회원 ID")
+    name: str = Field(..., description="회원 이름")
+    preferredSpecializedDiseases: List[str] = Field(default=[], description="전문 질환 관련 선호 태그")
+    preferredServiceTypes: List[str] = Field(default=[], description="서비스 유형 선호 태그")
+    preferredOperationalFeatures: List[str] = Field(default=[], description="운영 특성 선호 태그")
+    preferredFacilityFeatures: List[str] = Field(default=[], description="환경/시설 선호 태그")
+    latitude: Optional[float] = Field(default=None, description="위치 정보 (위도)")
+    longitude: Optional[float] = Field(default=None, description="위치 정보 (경도)")
+    
+    class Config:
+        populate_by_name = True
+
+
+class ElderlyInfo(BaseModel):
+    """어르신 프로필 정보"""
+    elderlyProfileId: int = Field(..., description="어르신 프로필 ID")
+    name: str = Field(..., description="어르신 이름")
+    gender: str = Field(..., description="성별")
+    birthDate: Optional[str] = Field(default=None, description="생년월일")
+    bloodType: Optional[str] = Field(default=None, description="혈액형")
+    phoneNumber: Optional[str] = Field(default=None, description="연락처")
+    longTermCareGrade: Optional[str] = Field(default=None, description="장기요양등급")
+    activityLevel: Optional[str] = Field(default=None, description="활동 수준")
+    cognitiveLevel: Optional[str] = Field(default=None, description="인지 수준")
+    notes: Optional[str] = Field(default=None, description="특이사항")
+    address: Optional[str] = Field(default=None, description="주소")
+    latitude: Optional[float] = Field(default=None, description="위도")
+    longitude: Optional[float] = Field(default=None, description="경도")
+    
+    class Config:
+        populate_by_name = True
+
+
+class RecommendationRequest(BaseModel):
+    """추천 요청 (Spring에서 전달)"""
+    member: MemberInfo = Field(..., description="회원 정보")
+    elderly: ElderlyInfo = Field(..., description="어르신 프로필 정보")
+    additionalText: Optional[str] = Field(default="", description="추가 요구사항")
+    limit: int = Field(default=5, description="추천 기관 수")
+    
+    class Config:
+        populate_by_name = True
+
+
 class RecommendationItem(BaseModel):
     """추천 기관 항목"""
     institutionId: int = Field(..., description="기관 ID")
@@ -28,52 +74,18 @@ class RecommendationItem(BaseModel):
         }
 
 
-class RecommendationRequest(BaseModel):
-    """추천 요청"""
-    member: "Member" = Field(..., description="회원 정보")
-    elderlyProfile: "ElderlyProfile" = Field(..., description="어르신 프로필")
-    additionalText: Optional[str] = Field(default="", description="추가 요구사항")
-    limit: int = Field(default=5, description="추천 기관 수")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "member": {
-                    "memberId": 1,
-                    "name": "김보호자"
-                },
-                "elderlyProfile": {
-                    "elderlyProfileId": 1,
-                    "name": "김할머니",
-                    "gender": "FEMALE",
-                    "birthDate": "1942-03-15",
-                    "activityLevel": "MEDIUM",
-                    "cognitiveLevel": "MODERATE_DEMENTIA",
-                    "longTermCareGrade": "GRADE_2"
-                },
-                "additionalText": "저희 어머니가 사람 많은 곳을 힘들어하세요",
-                "limit": 5
-            }
-        }
-
-
 class RecommendationResponse(BaseModel):
     """추천 응답"""
     success: bool = Field(..., description="성공 여부")
-    memberId: int = Field(..., description="회원 ID")
-    elderlyProfileId: int = Field(..., description="어르신 프로필 ID")
-    totalResults: int = Field(..., description="총 결과 수")
-    recommendations: List[RecommendationItem] = Field(..., description="추천 기관 리스트")
-    responseTime: Optional[int] = Field(default=None, description="응답 시간 (ms)")
+    institutions: List[RecommendationItem] = Field(..., description="추천 기관 리스트")
+    totalCount: int = Field(..., description="총 결과 수")
     
     class Config:
         json_schema_extra = {
             "example": {
                 "success": True,
-                "memberId": 1,
-                "elderlyProfileId": 1,
-                "totalResults": 5,
-                "recommendations": [
+                "totalCount": 5,
+                "institutions": [
                     {
                         "institutionId": 1,
                         "similarity": 0.92,
@@ -84,7 +96,6 @@ class RecommendationResponse(BaseModel):
                         "tags": ["치매", "당뇨", "장기요양", "치매전담"],
                         "recommendationReason": "치매 전문 케어와 24시간 간호사 상주로 어르신의 인지 상태에 맞는 전문적인 돌봄이 가능합니다."
                     }
-                ],
-                "responseTime": 850
+                ]
             }
         }
