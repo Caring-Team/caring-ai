@@ -82,7 +82,7 @@ class DatabaseService:
     def search_similar_institutions(
         self,
         user_embedding: np.ndarray,
-        limit: int = 5,
+        limit: int = 10,
         min_similarity: float = 0.0
     ) -> List[Dict]:
         """
@@ -147,7 +147,8 @@ class DatabaseService:
             
             cursor.close()
             
-            logger.info(f"✅ 유사 기관 검색 완료: {len(results)}개 발견 (상위 유사도: {results[0]['similarity']:.4f if results else 0})")
+            top_similarity = results[0]['similarity'] if results else 0
+            logger.info(f"✅ 유사 기관 검색 완료: {len(results)}개 발견 (상위 유사도: {top_similarity:.4f})")
             return results
             
         except Exception as e:
