@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with pgvector
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: caring-postgres
+    environment:
+      POSTGRES_DB: caring
+      POSTGRES_USER: caring_user
+      POSTGRES_PASSWORD: caring_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U caring_user -d caring"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - caring-network
+
+  # AI Server
+  ai-server:
+    build:
+      context: ./ai-server
+      dockerfile: Dockerfile
+    container_name: caring-ai-server
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: caring
+      DB_USER: caring_user
+      DB_PASSWORD: caring_password
+      AI_SERVER_PORT: 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./ai-server:/app
+      - model_cache:/root/.cache/huggingface
+    networks:
+      - caring-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  model_cache:
+
+networks:
+  caring-network:
+    driver: bridge
