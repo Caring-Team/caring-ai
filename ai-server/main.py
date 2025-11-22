@@ -6,7 +6,7 @@ import time
 
 from models.institution import InstitutionRequest, InstitutionResponse
 from models.user import Member, ElderlyProfile
-from models.recommendation import RecommendationResponse, RecommendationItem
+from models.recommendation import RecommendationResponse, RecommendationItem, RecommendationRequest
 from services.embedding_service import EmbeddingService
 from services.database_service import DatabaseService
 from utils.text_formatter import create_institution_text, create_user_profile_text
@@ -244,39 +244,38 @@ async def generate_user_profile_embedding(
 
 
 @app.post("/api/v1/recommendations", response_model=RecommendationResponse)
-async def get_recommendations(
-    member: Member,
-    elderlyProfile: ElderlyProfile,
-    additionalText: str = "",
-    limit: int = 5
-):
+async def get_recommendations(request: RecommendationRequest):
     """
     기능 3: 사용자 프로필 기반 기관 추천
     
+    Spring의 RecommendationRequest 형식으로 요청을 받아
     사용자 정보를 임베딩으로 변환한 후 pgvector로 유사한 기관을 검색하고
     RecommendationItem 형식으로 반환합니다.
     """
     try:
         start_time = time.time()
         
-        logger.info(f"📥 기관 추천 요청: 회원={member.name}, 어르신={elderlyProfile.name}, limit={limit}")
+        member = request.member
+        elderly = request.elderly
+        
+        logger.info(f"📥 기관 추천 요청: 회원={member.name}, 어르신={elderly.name}, limit={request.limit}")
         
         # 1. 사용자 프로필 → 텍스트 변환
         user_text = create_user_profile_text(
             member_name=member.name,
-            elderly_name=elderlyProfile.name,
-            gender=elderlyProfile.gender.value,
-            birth_date=str(elderlyProfile.birthDate) if elderlyProfile.birthDate else "",
-            activity_level=elderlyProfile.activityLevel.value if elderlyProfile.activityLevel else "",
-            cognitive_level=elderlyProfile.cognitiveLevel.value if elderlyProfile.cognitiveLevel else "",
-            long_term_care_grade=elderlyProfile.longTermCareGrade.value if elderlyProfile.longTermCareGrade else "",
-            notes=elderlyProfile.notes or "",
-            address=elderlyProfile.address or "",
-            preferred_specialized_diseases=elderlyProfile.preferredSpecializedDiseases,
-            preferred_service_types=elderlyProfile.preferredServiceTypes,
-            preferred_operational_features=elderlyProfile.preferredOperationalFeatures,
-            preferred_facility_features=elderlyProfile.preferredFacilityFeatures,
-            additional_text=additionalText
+            elderly_name=elderly.name,
+            gender=elderly.gender,
+            birth_date=elderly.birthDate or "",
+            activity_level=elderly.activityLevel or "",
+            cognitive_level=elderly.cognitiveLevel or "",
+            long_term_care_grade=elderly.longTermCareGrade or "",
+            notes=elderly.notes or "",
+            address=elderly.address or "",
+            preferred_specialized_diseases=member.preferredSpecializedDiseases,
+            preferred_service_types=member.preferredServiceTypes,
+            preferred_operational_features=member.preferredOperationalFeatures,
+            preferred_facility_features=member.preferredFacilityFeatures,
+            additional_text=request.additionalText or ""
         )
         
         # 2. 텍스트 → 임베딩 변환
@@ -285,13 +284,13 @@ async def get_recommendations(
         # 3. 유사 기관 검색 (limit보다 많이 가져와서 필터링 여유 확보)
         similar_institutions = db_service.search_similar_institutions(
             user_embedding=user_embedding,
-            limit=limit * 2,  # 필터링을 위해 2배로 조회
+            limit=request.limit * 2,  # 필터링을 위해 2배로 조회
             min_similarity=0.0
         )
         
         # 4. RecommendationItem 형식으로 변환
         recommendations = []
-        for inst in similar_institutions[:limit]:  # limit만큼만 반환
+        for inst in similar_institutions[:request.limit]:  # limit만큼만 반환
             metadata = inst.get("metadata", {})
             
             # 태그 리스트 생성 (전문질환, 서비스, 운영특성, 시설 모두 합침)
@@ -325,11 +324,8 @@ async def get_recommendations(
         
         return RecommendationResponse(
             success=True,
-            memberId=member.memberId,
-            elderlyProfileId=elderlyProfile.elderlyProfileId,
-            totalResults=len(recommendations),
-            recommendations=recommendations,
-            responseTime=response_time
+            institutions=recommendations,
+            totalCount=len(recommendations)
         )
         
     except Exception as e:
