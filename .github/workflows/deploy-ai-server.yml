@@ -71,6 +71,9 @@ jobs:
               | docker login --username AWS --password-stdin \
               430118840639.dkr.ecr.ap-northeast-2.amazonaws.com
             
+            # Docker 네트워크 생성 (없으면 생성, 있으면 스킵)
+            docker network create caring-network || true
+            
             # 기존 컨테이너 중지 및 삭제
             docker stop caring-ai-server || true
             docker rm caring-ai-server || true
