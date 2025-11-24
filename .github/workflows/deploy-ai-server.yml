@@ -1,0 +1,102 @@
+name: Deploy AI Server to EC2
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'ai-server/**'
+      - '.github/workflows/deploy-ai-server.yml'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REPO: caring-ai-server
+  IMAGE_URI: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-2.amazonaws.com/caring-ai-server
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: AWS Role 설정
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::430118840639:role/GitHubActionsECRDeployRole
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: ECR에 로그인
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Docker metadata 설정
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_URI }}
+          tags: |
+            type=raw,value=latest
+            type=sha
+
+      - name: Docker Buildx 설정
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker 이미지 빌드 및 ECR에 Push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ai-server
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: EC2 접속 및 배포
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            set -e
+            
+            # ECR 로그인
+            aws ecr get-login-password --region ap-northeast-2 \
+              | docker login --username AWS --password-stdin \
+              430118840639.dkr.ecr.ap-northeast-2.amazonaws.com
+            
+            # 기존 컨테이너 중지 및 삭제
+            docker stop caring-ai-server || true
+            docker rm caring-ai-server || true
+            
+            # 새 이미지 Pull
+            docker pull ${{ env.IMAGE_URI }}:latest
+            
+            # 새 컨테이너 실행
+            docker run -d \
+              --name caring-ai-server \
+              --restart unless-stopped \
+              -p 8001:8001 \
+              -e DB_HOST=${{ secrets.DB_HOST }} \
+              -e DB_PORT=5432 \
+              -e DB_NAME=caring \
+              -e DB_USER=${{ secrets.DB_USER }} \
+              -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
+              --network caring-network \
+              --log-driver json-file \
+              --log-opt max-size=10m \
+              --log-opt max-file=3 \
+              ${{ env.IMAGE_URI }}:latest
+            
+            # 구 이미지 정리
+            docker image prune -f
+            
+            # 헬스 체크
+            sleep 10
+            curl -f http://localhost:8001/health || exit 1
